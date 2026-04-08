@@ -1,0 +1,11 @@
+services:
+  vault-search:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: vault-search-app
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-}
+      - VAULT_TOKEN=${VAULT_TOKEN:-}
+      - SEARCH_TERM=${SEARCH_TERM:-}
+    command: []

@@ -1,0 +1,42 @@
+version: '3.8'
+
+networks:
+  vault-net:
+    name: vault-net
+    driver: bridge
+
+services:
+  vault:
+    image: hashicorp/vault:1.6.2
+    container_name: vault-dev
+    ports:
+      - "8200:8200"
+    environment:
+      - VAULT_LOCAL_CONFIG={"storage":{"file":{"path":"/vault/file"}},"listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":1}},"ui":true,"disable_mlock":true}
+    command: server
+    volumes:
+      - vault-data:/vault/file
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - vault-net
+
+  vault-seed:
+    build:
+      context: ./vault
+      dockerfile: Dockerfile
+    container_name: vault-seed
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+    depends_on:
+      - vault
+    networks:
+      - vault-net
+    volumes:
+      - vault-data:/vault/file
+    # Контейнер завершится после загрузки данных
+    restart: "no"
+
+volumes:
+  vault-data:
