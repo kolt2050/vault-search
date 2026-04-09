@@ -2,13 +2,13 @@
 
 ## TL;DR
 ```bash
-# Запуск инфраструктуры
+# Запуск инфраструктуры тестового стенда
 docker-compose up -d --build
 
 # Поиск с авторизацией через OIDC (Keycloak)
 python app/vault_search.py "что_ищем" --mount движок/начальная папка --auth oidc
 
-# Удаление инфраструктуры
+# Удаление инфраструктуры тестового стенда
 docker-compose down --rmi all 
 ```
 
