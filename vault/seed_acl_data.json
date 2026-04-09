@@ -1,0 +1,51 @@
+{
+  "backend-readonly": "path \"Backend/data/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/metadata/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "backend-metadata-segment": "path \"Backend/metadata/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/data/+/config\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "preprod-full-access": "path \"preprod/data/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"]\n}\n\npath \"preprod/metadata/*\" {\n  capabilities = [\"read\", \"delete\", \"list\"]\n}\n\npath \"preprod/data/auth-service/+/config\" {\n  capabilities = [\"read\", \"update\"]\n}\n",
+
+  "preprod-readonly": "path \"preprod/data/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"preprod/metadata/*\" {\n  capabilities = [\"list\"]\n}\n",
+
+  "production-admin": "path \"production/data/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"]\n}\n\npath \"production/metadata/*\" {\n  capabilities = [\"read\", \"delete\", \"list\"]\n}\n\npath \"production/delete/*\" {\n  capabilities = [\"update\"]\n}\n\npath \"production/undelete/*\" {\n  capabilities = [\"update\"]\n}\n",
+
+  "production-readonly": "path \"production/data/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"production/metadata/+/\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "production-db-only": "path \"production/data/database/*\" {\n  capabilities = [\"read\"]\n}\n\npath \"production/data/database/credentials\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "auth-service-deploy": "path \"preprod/data/auth-service/+/config\" {\n  capabilities = [\"read\", \"update\"]\n}\n\npath \"production/data/auth-service/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/data/auth-service/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "payment-service-access": "path \"production/data/payment-service/*\" {\n  capabilities = [\"read\"]\n}\n\npath \"preprod/data/payment-service/*\" {\n  capabilities = [\"read\", \"update\"]\n}\n\npath \"Backend/metadata/payment-service/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "notification-service": "path \"preprod/data/notification-service/+/config\" {\n  capabilities = [\"read\", \"update\"]\n}\n\npath \"production/data/notification-service/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/data/notification-service/smtp\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "api-keys-manager": "path \"preprod/data/api/keys\" {\n  capabilities = [\"read\", \"update\"]\n}\n\npath \"production/data/api/keys\" {\n  capabilities = [\"read\"]\n}\n\npath \"+/data/api/keys\" {\n  capabilities = [\"list\"]\n}\n",
+
+  "secrets-auditor": "path \"sys/audit\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/audit/*\" {\n  capabilities = [\"read\"]\n}\n\npath \"+/metadata/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"+/data/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "vault-admin": "path \"sys/mounts/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\", \"sudo\"]\n}\n\npath \"sys/mounts\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/policy/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"]\n}\n\npath \"sys/policy\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/health\" {\n  capabilities = [\"read\", \"sudo\"]\n}\n",
+
+  "auth-manager": "path \"auth/token/lookup\" {\n  capabilities = [\"update\"]\n}\n\npath \"auth/token/lookup/+\" {\n  capabilities = [\"read\"]\n}\n\npath \"auth/token/create\" {\n  capabilities = [\"update\", \"sudo\"]\n}\n\npath \"auth/token/revoke\" {\n  capabilities = [\"update\"]\n}\n\npath \"sys/auth\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/auth/*\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "deny-production-secrets": "path \"production/data/admin/*\" {\n  capabilities = [\"deny\"]\n}\n\npath \"production/data/root-credentials\" {\n  capabilities = [\"deny\"]\n}\n\npath \"production/data/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "ci-cd-pipeline": "path \"preprod/data/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"production/data/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/data/ci-cd/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/mounts\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "monitoring-service": "path \"Backend/data/monitoring/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/metadata/monitoring/+/\" {\n  capabilities = [\"read\"]\n}\n\npath \"preprod/data/monitoring/grafana\" {\n  capabilities = [\"read\"]\n}\n\npath \"production/data/monitoring/grafana\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "database-admin": "path \"production/data/database/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\"]\n}\n\npath \"preprod/data/database/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\"]\n}\n\npath \"+/data/database/+/credentials\" {\n  capabilities = [\"read\", \"update\"]\n}\n",
+
+  "redis-access": "path \"preprod/data/+/redis\" {\n  capabilities = [\"read\"]\n}\n\npath \"production/data/+/redis\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/data/redis/+/config\" {\n  capabilities = [\"read\", \"update\"]\n}\n",
+
+  "ssl-certificates": "path \"Backend/data/ssl/certificates/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/data/ssl/private-keys/*\" {\n  capabilities = [\"deny\"]\n}\n\npath \"Backend/metadata/ssl/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "developer-sandbox": "path \"preprod/data/sandbox/+/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"]\n}\n\npath \"preprod/metadata/sandbox/+/*\" {\n  capabilities = [\"read\", \"delete\", \"list\"]\n}\n\npath \"production/data/*\" {\n  capabilities = [\"deny\"]\n}\n",
+
+  "logging-service": "path \"Backend/data/logging/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/metadata/logging/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"preprod/data/logging/elasticsearch\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "infrastructure-team": "path \"Backend/data/infrastructure/*\" {\n  capabilities = [\"create\", \"read\", \"update\", \"delete\", \"list\"]\n}\n\npath \"Backend/metadata/infrastructure/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/mounts\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"sys/health\" {\n  capabilities = [\"read\"]\n}\n",
+
+  "service-mesh": "path \"Backend/data/consul/*\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/data/envoy/+/config\" {\n  capabilities = [\"read\"]\n}\n\npath \"Backend/metadata/consul/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n\npath \"Backend/metadata/envoy/+/\" {\n  capabilities = [\"read\", \"list\"]\n}\n",
+
+  "emergency-access": "path \"production/data/emergency/*\" {\n  capabilities = [\"read\", \"update\"]\n}\n\npath \"Backend/data/emergency/break-glass\" {\n  capabilities = [\"read\", \"update\", \"sudo\"]\n}\n\npath \"sys/seal\" {\n  capabilities = [\"sudo\"]\n}\n"
+}

@@ -38,5 +38,24 @@ services:
     # Контейнер завершится после загрузки данных
     restart: "no"
 
+  vault-seed-acl:
+    build:
+      context: ./vault
+      dockerfile: Dockerfile
+    container_name: vault-seed-acl
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+    depends_on:
+      - vault
+      - vault-seed
+    networks:
+      - vault-net
+    volumes:
+      - vault-data:/vault/file
+    command: ["python", "seed_acl.py"]
+    # Контейнер завершится после загрузки ACL Policies
+    restart: "no"
+
 volumes:
   vault-data:

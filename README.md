@@ -31,4 +31,16 @@ docker compose -f docker-compose.app.yml run --rm \
   -e VAULT_ADDR=http://host.docker.internal:8200/ \
   -e VAULT_TOKEN=токен \
   vault-search --empty
+
+# Поиск по ACL Policies (ищет внутри path "..." блоков)
+docker compose -f docker-compose.app.yml run --rm \
+  -e VAULT_ADDR=http://host.docker.internal:8200/ \
+  -e VAULT_TOKEN=токен \
+  vault-search "Backend/metadata" --acl
+
+# Пример: найти все политики содержащие wildcard-паттерн +
+docker compose -f docker-compose.app.yml run --rm \
+  -e VAULT_ADDR=http://host.docker.internal:8200/ \
+  -e VAULT_TOKEN=токен \
+  vault-search "metadata/+/" --acl
 ```
