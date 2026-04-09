@@ -9,5 +9,7 @@ COPY seed_data.json .
 COPY seed_acl.py .
 COPY seed_acl_data.json .
 COPY seed_oidc.py .
+COPY load_tester.py .
+COPY constant_load.py .
 
 CMD ["python", "seed.py"]

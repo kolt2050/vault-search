@@ -5,7 +5,7 @@ services:
     ports:
       - "8200:8200"
     environment:
-      - VAULT_LOCAL_CONFIG={"storage":{"file":{"path":"/vault/file"}},"listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":1}},"ui":true,"disable_mlock":true}
+      - VAULT_LOCAL_CONFIG={"storage":{"file":{"path":"/vault/file"}},"listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":1}},"ui":true,"disable_mlock":true,"telemetry":{"prometheus_retention_time":"10m","disable_hostname":true}}
     command: server
     volumes:
       - vault-data:/vault/file
@@ -87,6 +87,41 @@ services:
       - vault-data:/vault/file
     command: ["python", "seed_oidc.py"]
     restart: "no"
+
+  vault-load-tester:
+    build:
+      context: ./vault
+      dockerfile: Dockerfile
+    container_name: vault-load-tester
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+    depends_on:
+      - vault
+      - vault-seed
+    networks:
+      - vault-net
+    command: ["python", "load_tester.py"]
+    # Бесконечный рестарт, пока мы руками не остановим стенд
+    restart: "unless-stopped"
+
+  vault-constant-load:
+    build:
+      context: ./vault
+      dockerfile: Dockerfile
+    container_name: vault-constant-load
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - TARGET_RPS=1000
+      - WORKERS=50
+    depends_on:
+      - vault
+      - vault-seed
+    networks:
+      - vault-net
+    command: ["python", "constant_load.py"]
+    restart: "unless-stopped"
 
 
 networks:
