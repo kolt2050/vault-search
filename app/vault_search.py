@@ -8,6 +8,8 @@ from typing import List
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import urllib.parse
+import time
+import tracemalloc
 
 __version__ = "0.2.0"
 
@@ -120,8 +122,10 @@ def perform_oidc_login(url: str, bootstrap_token: str = None) -> str:
         sys.exit(1)
 
 class VaultSearcher:
-    def __init__(self, url: str, token: str):
+    def __init__(self, url: str, token: str, delay: float = 0.0):
         self.client = hvac.Client(url=url, token=token)
+        self.delay = delay
+        self.api_calls = 0
 
     def connect(self):
         if not self.client.is_authenticated():
@@ -129,22 +133,7 @@ class VaultSearcher:
             sys.exit(1)
         logger.info(f"Успешное подключение к Vault по адресу {self.client.url}")
 
-    def get_kv2_mounts(self) -> List[str]:
-        """Получает все точки монтирования (движки) типа KV v2."""
-        logger.info("Сканируем Vault для поиска всех движков KV v2...")
-        try:
-            response = self.client.sys.list_mounted_secrets_engines()
-            # hvac возвращает полный ответ API; движки находятся в 'data'
-            mounts = response.get('data', response) if isinstance(response, dict) else {}
-            kv_mounts = []
-            for path, config in mounts.items():
-                if isinstance(config, dict) and config.get('type') == 'kv' and config.get('options', {}).get('version') == '2':
-                    kv_mounts.append(path.rstrip('/'))
-            logger.info(f"Найдены движки: {', '.join(kv_mounts)}")
-            return kv_mounts
-        except Exception as e:
-            logger.error(f"Ошибка при получении списка движков: {e}", exc_info=True)
-            return []
+
 
     def search_keys(self, mount_point: str, current_path: str, search_term: str, results: List[str], mode: str = 'all', find_empty: bool = False):
         """Рекурсивно ищет ключи в Vault (KV v2).
@@ -158,10 +147,13 @@ class VaultSearcher:
         search_path = (mode in ('all', 'path')) and not find_empty
         search_keys = (mode in ('all', 'keys')) or find_empty
         try:
+            self.api_calls += 1
             list_response = self.client.secrets.kv.v2.list_secrets(
                 mount_point=mount_point,
                 path=current_path
             )
+            if self.delay > 0:
+                time.sleep(self.delay)
             keys = list_response.get('data', {}).get('keys', [])
             
             for key in keys:
@@ -183,11 +175,14 @@ class VaultSearcher:
                     # Читаем содержимое секрета, чтобы проверить его внутренние ключи
                     if search_keys:
                         try:
+                            self.api_calls += 1
                             read_response = self.client.secrets.kv.v2.read_secret_version(
                                 mount_point=mount_point,
                                 path=full_path,
                                 raise_on_deleted_version=True
                             )
+                            if self.delay > 0:
+                                time.sleep(self.delay)
                             secret_data = read_response.get('data', {}).get('data', {})
 
                             if find_empty:
@@ -219,7 +214,10 @@ class VaultSearcher:
         """
         logger.info("Получаем список ACL Policies...")
         try:
+            self.api_calls += 1
             response = self.client.sys.list_policies()
+            if self.delay > 0:
+                time.sleep(self.delay)
             policy_names = response.get('data', {}).get('policies', response.get('policies', []))
         except Exception as e:
             logger.error(f"Ошибка при получении списка политик: {e}", exc_info=True)
@@ -234,7 +232,10 @@ class VaultSearcher:
 
         for policy_name in user_policies:
             try:
+                self.api_calls += 1
                 policy_data = self.client.sys.read_policy(name=policy_name)
+                if self.delay > 0:
+                    time.sleep(self.delay)
                 # hvac может вернуть разную структуру в зависимости от версии
                 if isinstance(policy_data, dict):
                     hcl_rules = policy_data.get('data', {}).get('rules', '') or policy_data.get('rules', '')
@@ -259,18 +260,23 @@ class VaultSearcher:
 
 
 def main():
+    start_wall = time.perf_counter()
+    start_cpu = time.process_time()
+    tracemalloc.start()
+
     logger.info(f"Запуск Vault Search v{__version__}")
 
     parser = argparse.ArgumentParser(description='Поиск по ключам и их содержимому во всех движках HashiCorp Vault')
     parser.add_argument('search_term', help='Часть пути или внутреннего ключа (любые вхождения), который нужно найти', nargs='?', default=os.getenv('SEARCH_TERM', ''))
     parser.add_argument('--url', default=os.getenv('VAULT_ADDR', 'http://127.0.0.1:8200'), help='URL сервера Vault')
     parser.add_argument('--token', default=os.getenv('VAULT_TOKEN', 'myroot'), help='Vault Token')
-    parser.add_argument('--mount', default='all', help='Точка монтирования (по умолчанию "all"). Если "all", ищет во всех доступных движках.')
+    parser.add_argument('--mount', required=True, help='Точка монтирования KV v2 (обязательный параметр). Пример: stage, preprod, prod')
     parser.add_argument('--mode', default='all', choices=['all', 'path', 'keys'],
                         help='Режим поиска: "all" — везде, "path" — только в путях секретов, "keys" — только во внутренних ключах (по умолчанию "all")')
     parser.add_argument('--empty', action='store_true', help='Искать только пустые секреты (без ключей). Поисковый запрос применяется только к путям.')
     parser.add_argument('--acl', action='store_true', help='Искать строку внутри path "..." блоков ACL Policies (поиск по путям в правилах политик)')
     parser.add_argument('--auth', default='token', choices=['token', 'oidc'], help='Метод аутентификации: "token" (встроенный токен) или "oidc" (требует браузер для входа)')
+    parser.add_argument('--delay', type=float, default=0.0, help='Задержка в секундах между API запросами к Vault (например, 0.05) для снижения нагрузки')
 
     args, unknown = parser.parse_known_args()
 
@@ -308,7 +314,7 @@ def main():
         else:
             args.token = perform_oidc_login(url=args.url)
 
-    searcher = VaultSearcher(url=args.url, token=args.token)
+    searcher = VaultSearcher(url=args.url, token=args.token, delay=args.delay)
     searcher.connect()
 
     results = []
@@ -326,18 +332,8 @@ def main():
             mode_names = {'all': 'пути + ключи', 'path': 'только пути', 'keys': 'только ключи'}
             logger.info(f"Начинаем поиск вхождений строки '{args.search_term}' (режим: {mode_names[args.mode]})...")
 
-        mounts_to_search = []
-        if args.mount.lower() == 'all':
-            mounts_to_search = searcher.get_kv2_mounts()
-            if not mounts_to_search:
-                logger.error("В Vault не найдено ни одного секретного хранилища формата KV v2.")
-                sys.exit(1)
-        else:
-            mounts_to_search = [args.mount]
-
-        for mount in mounts_to_search:
-            logger.info(f"=== Поиск в движке '{mount}' ===")
-            searcher.search_keys(mount_point=mount, current_path="", search_term=args.search_term, results=results, mode=args.mode, find_empty=args.empty)
+        logger.info(f"=== Поиск в движке '{args.mount}' ===")
+        searcher.search_keys(mount_point=args.mount, current_path="", search_term=args.search_term, results=results, mode=args.mode, find_empty=args.empty)
 
         print(f"\n--- Результаты поиска по запросу '{args.search_term}' ---")
 
@@ -348,6 +344,24 @@ def main():
         for r in results:
             print(f"- {r}")
         logger.info(f"Поиск завершен. Найдено {len(results)} результатов.")
+
+    # Вывод метрик потребления памяти и процессорного времени
+    current_mem, peak_mem = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    wall_time = time.perf_counter() - start_wall
+    cpu_time = time.process_time() - start_cpu
+    
+    api_calls = searcher.api_calls
+    rps = api_calls / wall_time if wall_time > 0 else 0
+
+    print(f"\n--- Мониторинг производительности ---")
+    print(f"Всего запросов к API:      {api_calls}")
+    print(f"Скорость (RPS):            {rps:.1f} req/s")
+    print(f"Потребление памяти (пик):  {peak_mem / 1024 / 1024:.2f} MB")
+    print(f"Процессорное время:        {cpu_time:.3f} сек")
+    print(f"Реальное время (wall):     {wall_time:.3f} сек")
+    
+    logger.info(f"Performance: API Calls {api_calls} | RPS {rps:.1f} | Peak Memory {peak_mem / 1024 / 1024:.2f} MB | CPU {cpu_time:.3f}s | Wall {wall_time:.3f}s")
 
 if __name__ == "__main__":
     main()

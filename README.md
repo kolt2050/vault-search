@@ -7,7 +7,7 @@
 - **Комбинированный** (`--mode all`, по умолчанию) — одновременно по путям и ключам
 - **Пустые секреты** (`--empty`) — секреты без единого ключа; можно добавить строку для фильтрации по пути
 - **ACL Policies** (`--acl`) — парсит HCL-правила политик и ищет в `path "..."` блоках (поддерживает wildcard `+`, `*`)
-- **Выбор движка** (`--mount <name>`) — искать в конкретном KV v2; без флага — во всех сразу
+- **Движок** (`--mount <name>`, обязательный) — указывает KV v2 движок для поиска (`stage`, `preprod`, `prod`)
 - Поиск **регистронезависимый**, обход директорий **рекурсивный**
 
 ---
@@ -18,6 +18,11 @@
 
 ```bash
 docker-compose up -d --build
+```
+
+```bash
+# Удалить все контейнеры, сети и тома
+docker-compose down --rmi all
 ```
 
 **Доступные сервисы после запуска:**
@@ -45,12 +50,12 @@ pip install -r app/requirements.txt
 ### Поиск с авторизацией через встроенный токен:
 *(По умолчанию используется Root-токен для тестов)*
 ```bash
-python app/vault_search.py "что_ищем" 
+python app/vault_search.py "что_ищем" --mount stage
 ```
 
 ### Поиск с авторизацией через OIDC (Keycloak):
 ```bash
-python app/vault_search.py "что_ищем" --auth oidc
+python app/vault_search.py "что_ищем" --mount prod --auth oidc
 ```
 При запуске этой команды:
 1. Откроется браузер со страницей авторизации Keycloak.
@@ -60,19 +65,36 @@ python app/vault_search.py "что_ищем" --auth oidc
 **Примеры расширенного поиска:**
 ```bash
 # Ищем только в путях
-python app/vault_search.py "что_ищем" --mode path
+python app/vault_search.py "auth-service" --mount preprod --mode path
 
 # Ищем только во внутренних ключах
-python app/vault_search.py "что_ищем" --mode keys
+python app/vault_search.py "api_key" --mount prod --mode keys
 
 # Ищем пустые секреты
-python app/vault_search.py "что_ищем" --empty
+python app/vault_search.py "cache" --mount stage --empty
 
 # Поиск по ACL Policies (ищет внутри path "..." блоков)
-python app/vault_search.py "Backend/metadata" --acl
+python app/vault_search.py "Backend/metadata" --mount stage --acl
 
 # Найти все политики содержащие wildcard-паттерн +
-python app/vault_search.py "metadata/+/" --acl
+python app/vault_search.py "metadata/+/" --mount prod --acl
+```
+
+### Мониторинг производительности и защита от перегрузки
+
+Поиск генерирует подробный отчет о производительности по завершению обхода:
+* **Всего запросов к API** (API Calls) — общее количество HTTP-запросов к Vault.
+* **Скорость (RPS)** — количество запросов в секунду (Requests Per Second).
+* **Потребление памяти (пик)**, а также **Раздельное время выполнения** (CPU и Wall-clock).
+
+> [!WARNING]
+> Рекурсивный обход может генерировать тысячи запросов за секунды, что может создать высокую нагрузку на кластер Vault в Production.
+
+Для защиты сервера Vault от перегрузки используйте механизм ограничения скорости (Rate Limiting) с помощью флага `--delay`:
+
+```bash
+# Добавить паузу 50 мс после каждого вызова API (ограничит скорость обхода до ~20 RPS)
+python app/vault_search.py "my_secret" --mount prod --delay 0.05
 ```
 
 ---
