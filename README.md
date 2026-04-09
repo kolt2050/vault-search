@@ -7,6 +7,9 @@ docker-compose up -d --build
 
 # Поиск с авторизацией через OIDC (Keycloak)
 python app/vault_search.py "что_ищем" --mount движок/начальная папка --auth oidc
+
+# Удаление инфраструктуры
+docker-compose down --rmi all 
 ```
 
 ## Возможности поиска
