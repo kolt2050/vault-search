@@ -1,0 +1,58 @@
+{
+  "realm": "vault",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "vault-search",
+      "name": "Vault Search OIDC Client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "vault-search-secret",
+      "redirectUris": [
+        "http://localhost:8250/oidc/callback",
+        "http://localhost:8200/ui/vault/auth/oidc/oidc/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8200",
+        "http://localhost:8250"
+      ],
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@example.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

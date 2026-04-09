@@ -5,6 +5,9 @@ import logging
 import argparse
 import hvac
 from typing import List
+import webbrowser
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import urllib.parse
 
 __version__ = "0.2.0"
 
@@ -21,6 +24,100 @@ logger.addHandler(file_handler)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
+class OIDCCallbackHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        query = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(query)
+        self.server.callback_params = params
+        
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(b"<html><body><h1>Authentication successful!</h1><p>You can close this window and return to the terminal.</p></body></html>")
+    
+    def log_message(self, format, *args):
+        pass
+
+def get_cached_token() -> str:
+    """Проверяет наличие валидного токена в ~/.vault-token."""
+    token_file = os.path.expanduser('~/.vault-token')
+    if not os.path.exists(token_file):
+        return None
+    try:
+        with open(token_file, 'r') as f:
+            token = f.read().strip()
+        if not token:
+            return None
+        # Проверяем, что токен всё ещё валиден
+        client = hvac.Client(url=os.getenv('VAULT_ADDR', 'http://127.0.0.1:8200'), token=token)
+        client.auth.token.lookup_self()
+        logger.info("Найден валидный кэшированный токен.")
+        return token
+    except Exception:
+        return None
+
+def perform_oidc_login(url: str, bootstrap_token: str = None) -> str:
+    """Выполняет OIDC логин через Vault API и возвращает токен."""
+    logger.info("Инициализация OIDC логина...")
+    token_for_auth_url = bootstrap_token or os.getenv('VAULT_TOKEN', 'myroot')
+    client = hvac.Client(url=url, token=token_for_auth_url)
+    
+    try:
+        # hvac oidc_authorization_url_request по умолчанию использует path='oidc'
+        # и строит URL auth/oidc/auth_url — это правильно, если auth method смонтирован на 'oidc'
+        auth_url_req = client.auth.oidc.oidc_authorization_url_request(
+            role='default',
+            redirect_uri='http://localhost:8250/oidc/callback'
+        )
+        auth_url = auth_url_req['data'].get('auth_url')
+    except Exception as e:
+        logger.error(f"Ошибка при получении OIDC Authorization URL: {e}")
+        sys.exit(1)
+
+    if not auth_url:
+        logger.error("Vault не вернул auth_url для OIDC.")
+        sys.exit(1)
+
+    # Запускаем локальный веб-сервер для получения callback
+    server = HTTPServer(('localhost', 8250), OIDCCallbackHandler)
+    server.callback_params = {}
+    
+    logger.info("Открываю браузер для входа...")
+    webbrowser.open(auth_url)
+    
+    logger.info("Ожидание ответа от браузера (callback)...")
+    server.handle_request()
+    
+    params = server.callback_params
+    code = params.get('code', [''])[0]
+    state = params.get('state', [''])[0]
+    
+    if not code or not state:
+        logger.error("Не удалось получить code / state из OIDC callback.")
+        sys.exit(1)
+        
+    try:
+        auth_result = client.auth.oidc.oidc_callback(
+            code=code,
+            path='oidc',
+            state=state,
+            nonce=""
+        )
+        token = auth_result['auth']['client_token']
+        logger.info("OIDC логин успешен!")
+        # Сохраняем токен в ~/.vault-token для повторного использования
+        token_file = os.path.expanduser('~/.vault-token')
+        try:
+            with open(token_file, 'w') as f:
+                f.write(token)
+            logger.info(f"Токен сохранён в {token_file}")
+        except Exception as e:
+            logger.debug(f"Не удалось сохранить токен: {e}")
+        return token
+    except Exception as e:
+        logger.error(f"Ошибка при обработке OIDC callback в Vault: {e}")
+        sys.exit(1)
 
 class VaultSearcher:
     def __init__(self, url: str, token: str):
@@ -173,6 +270,7 @@ def main():
                         help='Режим поиска: "all" — везде, "path" — только в путях секретов, "keys" — только во внутренних ключах (по умолчанию "all")')
     parser.add_argument('--empty', action='store_true', help='Искать только пустые секреты (без ключей). Поисковый запрос применяется только к путям.')
     parser.add_argument('--acl', action='store_true', help='Искать строку внутри path "..." блоков ACL Policies (поиск по путям в правилах политик)')
+    parser.add_argument('--auth', default='token', choices=['token', 'oidc'], help='Метод аутентификации: "token" (встроенный токен) или "oidc" (требует браузер для входа)')
 
     args, unknown = parser.parse_known_args()
 
@@ -201,6 +299,14 @@ def main():
     if not args.search_term and not args.empty:
         logger.error("Не указан искомый ключ (поисковый запрос). Используйте аргумент командной строки или SEARCH_TERM.")
         sys.exit(1)
+
+    if args.auth == 'oidc':
+        # Проверяем кэшированный токен (аналог: if ! vault token lookup; then vault login --method=oidc)
+        cached = get_cached_token()
+        if cached:
+            args.token = cached
+        else:
+            args.token = perform_oidc_login(url=args.url)
 
     searcher = VaultSearcher(url=args.url, token=args.token)
     searcher.connect()

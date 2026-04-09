@@ -1,10 +1,3 @@
-version: '3.8'
-
-networks:
-  vault-net:
-    name: vault-net
-    driver: bridge
-
 services:
   vault:
     image: hashicorp/vault:1.6.2
@@ -18,6 +11,9 @@ services:
       - vault-data:/vault/file
     cap_add:
       - IPC_LOCK
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "localhost:host-gateway"
     networks:
       - vault-net
 
@@ -56,6 +52,47 @@ services:
     command: ["python", "seed_acl.py"]
     # Контейнер завершится после загрузки ACL Policies
     restart: "no"
+
+  keycloak:
+    build:
+      context: ./keycloak
+      dockerfile: Dockerfile
+    container_name: keycloak
+    ports:
+      - "9080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME=localhost
+      - KC_HOSTNAME_PORT=9080
+      - KC_HOSTNAME_STRICT_BACKCHANNEL=true
+    networks:
+      - vault-net
+
+  vault-seed-oidc:
+    build:
+      context: ./vault
+      dockerfile: Dockerfile
+    container_name: vault-seed-oidc
+    environment:
+      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
+      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - KEYCLOAK_URL=http://keycloak:8080
+    depends_on:
+      - vault
+      - keycloak
+    networks:
+      - vault-net
+    volumes:
+      - vault-data:/vault/file
+    command: ["python", "seed_oidc.py"]
+    restart: "no"
+
+
+networks:
+  vault-net:
+    name: vault-net
+    driver: bridge
 
 volumes:
   vault-data:

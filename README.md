@@ -1,46 +1,93 @@
 # Утилита для поиска в HashiCorp Vault
-## Запуск vault с тестовыми данными:
-```
-docker compose -f docker-compose.vault.yml up -d
-```
 
-## Запуск поисковой утилиты:
+## 1. Запуск инфраструктуры (Vault + Keycloak)
+
+В проекте настроен **Keycloak** как внешний OIDC Identity Provider, а Vault выступает в роли OIDC-клиента. Вся инфраструктура объединена в единый файл, который поднимает сервисы и автоматически загружает (seed) тестовые данные и OIDC-конфигурацию:
 
 ```bash
-# VAULT_TOKEN=myroot (для тестового волта)
-# VAULT_ADDR=http://host.docker.internal:8200/ - это адрес Vault-сервера который запущен рядом для теста
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search "что_ищем" 
+docker-compose up -d --build
+```
 
+**Доступные сервисы после запуска:**
+- **Vault UI**: http://localhost:8200
+- **Keycloak Admin**: http://localhost:9080 (логин: `admin`, пароль: `admin`)
+
+В Keycloak автоматически создаётся:
+- Realm: `vault`
+- Клиент: `vault-search`
+- Тестовый пользователь: `test` (пароль: `test`)
+
+---
+
+## 2. Локальный запуск поиска (из терминала)
+
+Для поиска используется Python-скрипт, который запускается на вашем хосте (вне контейнеров).
+
+**Первоначальная настройка (установка зависимостей):**
+```bash
+python -m venv venv
+venv\Scripts\activate       # Для Windows
+pip install -r app/requirements.txt
+```
+
+### Поиск с авторизацией через встроенный токен:
+*(По умолчанию используется Root-токен для тестов)*
+```bash
+python app/vault_search.py "что_ищем" 
+```
+
+### Поиск с авторизацией через OIDC (Keycloak):
+```bash
+python app/vault_search.py "что_ищем" --auth oidc
+```
+При запуске этой команды:
+1. Откроется браузер со страницей авторизации Keycloak.
+2. Введите тестовые данные (**Username**: `test`, **Password**: `test`).
+3. После входа скрипт получит токен и выполнит поиск.
+
+**Примеры расширенного поиска:**
+```bash
 # Ищем только в путях
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search "что_ищем" --mode path
+python app/vault_search.py "что_ищем" --mode path
 
 # Ищем только во внутренних ключах
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search "что_ищем" --mode keys
+python app/vault_search.py "что_ищем" --mode keys
 
 # Ищем пустые секреты
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search --empty
+python app/vault_search.py "что_ищем" --empty
 
 # Поиск по ACL Policies (ищет внутри path "..." блоков)
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search "Backend/metadata" --acl
+python app/vault_search.py "Backend/metadata" --acl
 
-# Пример: найти все политики содержащие wildcard-паттерн +
-docker compose -f docker-compose.app.yml run --rm \
-  -e VAULT_ADDR=http://host.docker.internal:8200/ \
-  -e VAULT_TOKEN=токен \
-  vault-search "metadata/+/" --acl
+# Найти все политики содержащие wildcard-паттерн +
+python app/vault_search.py "metadata/+/" --acl
 ```
+
+---
+
+## 3. Вход в Vault UI через OIDC (Браузер)
+
+Вы можете зайти в веб-интерфейс Vault, используя настроенную OIDC-авторизацию:
+
+1. Откройте в браузере адрес: **http://localhost:8200** *(используйте именно `localhost`, а не 127.0.0.1, так как безопасность Callback URL привязана к этому домену)*.
+2. На экране входа в выпадающем списке **Method** измените значение на **OIDC**.
+3. Поле **Role** оставьте пустым (автоматически применится `default`).
+4. Нажмите **"Sign in with OIDC Provider"**.
+5. Вас перенаправит на страницу Keycloak. Введите данные тестового пользователя:
+   - **Username:** `test`
+   - **Password:** `test`
+6. Keycloak проверит данные и направит вас обратно в Vault, авторизовав под тестовым профилем с доступом на чтение (`readonly`).
+
+---
+
+## 4. Вход в панель управления Keycloak
+
+Если вам нужно посмотреть настройки OIDC-клиента или управлять пользователями:
+
+1. Откройте в браузере адрес: **http://localhost:9080**
+2. Нажмите на ссылку **"Administration Console"**.
+3. Введите учетные данные администратора:
+   - **Username:** `admin`
+   - **Password:** `admin`
+4. После входа нажмите на название текущего Realm (`master`) в левом верхнем углу и выберите **`vault`**.
+5. Теперь вы можете управлять пользователями (вкладка *Users*) или настройками клиентов (вкладка *Clients* -> *vault-search*).
