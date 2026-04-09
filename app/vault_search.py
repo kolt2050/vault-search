@@ -122,7 +122,7 @@ def perform_oidc_login(url: str, bootstrap_token: str = None) -> str:
         sys.exit(1)
 
 class VaultSearcher:
-    def __init__(self, url: str, token: str, delay: float = 0.0):
+    def __init__(self, url: str, token: str, delay: float = 0.01):
         self.client = hvac.Client(url=url, token=token)
         self.delay = delay
         self.api_calls = 0
@@ -135,17 +135,19 @@ class VaultSearcher:
 
 
 
-    def search_keys(self, mount_point: str, current_path: str, search_term: str, results: List[str], mode: str = 'all', find_empty: bool = False):
+    def search_keys(self, mount_point: str, current_path: str, search_term: str, results: List[str], mode: str = 'keys', find_empty: bool = False):
         """Рекурсивно ищет ключи в Vault (KV v2).
         
-        mode: 'all' — искать и в путях, и во внутренних ключах
-              'path' — только в путях секретов
+        mode: 'path' — только в путях секретов
               'keys' — только во внутренних ключах секретов
+              'values' — только в значениях секретов
         find_empty: искать секреты без внутренних ключей (если True, ignore mode)
         """
         logger.debug(f"Обход директории: {mount_point}/{current_path}")
-        search_path = (mode in ('all', 'path')) and not find_empty
-        search_keys = (mode in ('all', 'keys')) or find_empty
+        search_path = (mode == 'path') and not find_empty
+        search_keys = (mode == 'keys') or find_empty
+        search_values = (mode == 'values') and not find_empty
+        search_content = search_keys or search_values
         try:
             self.api_calls += 1
             list_response = self.client.secrets.kv.v2.list_secrets(
@@ -172,8 +174,8 @@ class VaultSearcher:
                         if absolute_path not in results:
                             results.append(absolute_path)
 
-                    # Читаем содержимое секрета, чтобы проверить его внутренние ключи
-                    if search_keys:
+                    # Читаем содержимое секрета, чтобы проверить его внутренние ключи или значения
+                    if search_content:
                         try:
                             self.api_calls += 1
                             read_response = self.client.secrets.kv.v2.read_secret_version(
@@ -193,10 +195,15 @@ class VaultSearcher:
                                         if absolute_path not in results:
                                             results.append(absolute_path)
                             else:
-                                for internal_key in secret_data.keys():
-                                    if search_term.lower() in internal_key.lower():
+                                for internal_key, internal_value in secret_data.items():
+                                    if search_keys and search_term.lower() in internal_key.lower():
                                         match_info = f"{absolute_path} -> ключ '{internal_key}'"
                                         logger.info(f"Найден ключ внутри секрета: {match_info}")
+                                        if match_info not in results:
+                                            results.append(match_info)
+                                    if search_values and internal_value is not None and search_term.lower() in str(internal_value).lower():
+                                        match_info = f"{absolute_path} -> ключ '{internal_key}' -> содержит искомое значение"
+                                        logger.info(f"Найдено значение внутри секрета: {match_info}")
                                         if match_info not in results:
                                             results.append(match_info)
                         except Exception as e:
@@ -266,17 +273,17 @@ def main():
 
     logger.info(f"Запуск Vault Search v{__version__}")
 
-    parser = argparse.ArgumentParser(description='Поиск по ключам и их содержимому во всех движках HashiCorp Vault')
-    parser.add_argument('search_term', help='Часть пути или внутреннего ключа (любые вхождения), который нужно найти', nargs='?', default=os.getenv('SEARCH_TERM', ''))
+    parser = argparse.ArgumentParser(description='Поиск по ключам, их содержимому и значениям во всех движках HashiCorp Vault')
+    parser.add_argument('search_term', help='Часть пути, ключа или значения (любые вхождения), который нужно найти', nargs='?', default=os.getenv('SEARCH_TERM', ''))
     parser.add_argument('--url', default=os.getenv('VAULT_ADDR', 'http://127.0.0.1:8200'), help='URL сервера Vault')
     parser.add_argument('--token', default=os.getenv('VAULT_TOKEN', 'myroot'), help='Vault Token')
     parser.add_argument('--mount', required=True, help='Точка монтирования KV v2 (обязательный параметр). Пример: stage, preprod, prod')
-    parser.add_argument('--mode', default='all', choices=['all', 'path', 'keys'],
-                        help='Режим поиска: "all" — везде, "path" — только в путях секретов, "keys" — только во внутренних ключах (по умолчанию "all")')
+    parser.add_argument('--mode', default='keys', choices=['path', 'keys', 'values'],
+                        help='Режим поиска: "path" — только в путях секретов, "keys" — только во внутренних ключах, "values" — только в значениях (по умолчанию "keys")')
     parser.add_argument('--empty', action='store_true', help='Искать только пустые секреты (без ключей). Поисковый запрос применяется только к путям.')
     parser.add_argument('--acl', action='store_true', help='Искать строку внутри path "..." блоков ACL Policies (поиск по путям в правилах политик)')
     parser.add_argument('--auth', default='token', choices=['token', 'oidc'], help='Метод аутентификации: "token" (встроенный токен) или "oidc" (требует браузер для входа)')
-    parser.add_argument('--delay', type=float, default=0.0, help='Задержка в секундах между API запросами к Vault (например, 0.05) для снижения нагрузки')
+    parser.add_argument('--delay', type=float, default=0.01, help='Задержка в секундах между API запросами к Vault (по умолчанию 0.01) для снижения нагрузки')
 
     args, unknown = parser.parse_known_args()
 
@@ -329,7 +336,7 @@ def main():
         if args.empty:
             logger.info(f"Начинаем поиск ПУСТЫХ секретов (строка: '{args.search_term}')...")
         else:
-            mode_names = {'all': 'пути + ключи', 'path': 'только пути', 'keys': 'только ключи'}
+            mode_names = {'path': 'только пути', 'keys': 'только ключи', 'values': 'только значения'}
             logger.info(f"Начинаем поиск вхождений строки '{args.search_term}' (режим: {mode_names[args.mode]})...")
 
         logger.info(f"=== Поиск в движке '{args.mount}' ===")

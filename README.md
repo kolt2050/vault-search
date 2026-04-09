@@ -6,7 +6,7 @@
 docker-compose up -d --build
 
 # Поиск с авторизацией через OIDC (Keycloak)
-python app/vault_search.py "что_ищем" --mount движок/начальная папка --auth oidc
+python app/vault_search.py "что_ищем" --mount движок/начальная папка --mode values --auth oidc
 
 # Удаление инфраструктуры тестового стенда
 docker-compose down --rmi all 
@@ -15,8 +15,8 @@ docker-compose down --rmi all
 ## Возможности поиска
 
 - **По путям секретов** (`--mode path`) — вхождение строки в путь (`secret/myapp/config`)
-- **По внутренним ключам** (`--mode keys`) — поиск среди ключей внутри секрета (`password`, `api_key`)
-- **Комбинированный** (`--mode all`, по умолчанию) — одновременно по путям и ключам
+- **По внутренним ключам** (`--mode keys`, по умолчанию) — поиск среди ключей внутри секрета (`password`, `api_key`)
+- **По значениям секретов** (`--mode values`) — поиск подстроки в значениях (включая вложенные объекты)
 - **Пустые секреты** (`--empty`) — секреты без единого ключа; можно добавить строку для фильтрации по пути
 - **ACL Policies** (`--acl`) — парсит HCL-правила политик и ищет в `path "..."` блоках
 - **Движок** (`--mount <name>`, обязательный) — указывает KV v2 движок для поиска (`stage`, `preprod`, `prod`)
@@ -87,6 +87,9 @@ python app/vault_search.py "auth-service" --mount preprod --mode path
 # Ищем только во внутренних ключах
 python app/vault_search.py "api_key" --mount prod --mode keys
 
+# Ищем внутри значений секретов
+python app/vault_search.py "my_super_password" --mount prod --mode values
+
 # Ищем пустые секреты
 python app/vault_search.py "cache" --mount stage --empty
 
@@ -108,6 +111,9 @@ python app/vault_search.py "metadata/+/" --mount prod --acl
 > Рекурсивный обход может генерировать тысячи запросов за секунды, что может создать высокую нагрузку на кластер Vault в Production.
 
 Для защиты сервера Vault от перегрузки используйте механизм ограничения скорости (Rate Limiting) с помощью флага `--delay`:
+
+> [!NOTE]
+> По умолчанию скрипт уже использует небольшую задержку в **0.01 сек** (10 мс) между вызовами, чтобы не положить Vault. Для полного отключения ограничений передайте `--delay 0.0`.
 
 ```bash
 # Добавить паузу 50 мс после каждого вызова API (ограничит скорость обхода до ~20 RPS)
