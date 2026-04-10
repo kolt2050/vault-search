@@ -59,7 +59,7 @@ def get_cached_token() -> str:
     except Exception:
         return None
 
-def perform_oidc_login(url: str, bootstrap_token: str = None) -> str:
+def perform_oidc_login(url: str, oidc_role: str = 'default', bootstrap_token: str = None) -> str:
     """Выполняет OIDC логин через Vault API и возвращает токен."""
     logger.info("Инициализация OIDC логина...")
     token_for_auth_url = bootstrap_token or os.getenv('VAULT_TOKEN', 'myroot')
@@ -69,7 +69,7 @@ def perform_oidc_login(url: str, bootstrap_token: str = None) -> str:
         # hvac oidc_authorization_url_request по умолчанию использует path='oidc'
         # и строит URL auth/oidc/auth_url — это правильно, если auth method смонтирован на 'oidc'
         auth_url_req = client.auth.oidc.oidc_authorization_url_request(
-            role='default',
+            role=oidc_role,
             redirect_uri='http://localhost:8250/oidc/callback'
         )
         auth_url = auth_url_req['data'].get('auth_url')
@@ -283,6 +283,7 @@ def main():
     parser.add_argument('--empty', action='store_true', help='Искать только пустые секреты (без ключей). Поисковый запрос применяется только к путям.')
     parser.add_argument('--acl', action='store_true', help='Искать строку внутри path "..." блоков ACL Policies (поиск по путям в правилах политик)')
     parser.add_argument('--auth', default='token', choices=['token', 'oidc'], help='Метод аутентификации: "token" (встроенный токен) или "oidc" (требует браузер для входа)')
+    parser.add_argument('--oidc-role', default='default', help='Имя роли в Vault для OIDC аутентификации (по умолчанию "default")')
     parser.add_argument('--delay', type=float, default=0.01, help='Задержка в секундах между API запросами к Vault (по умолчанию 0.01) для снижения нагрузки')
 
     args, unknown = parser.parse_known_args()
@@ -319,7 +320,7 @@ def main():
         if cached:
             args.token = cached
         else:
-            args.token = perform_oidc_login(url=args.url)
+            args.token = perform_oidc_login(url=args.url, oidc_role=args.oidc_role)
 
     searcher = VaultSearcher(url=args.url, token=args.token, delay=args.delay)
     searcher.connect()

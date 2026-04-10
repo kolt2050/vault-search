@@ -64,16 +64,23 @@ venv\Scripts\activate       # Для Windows
 pip install -r app/requirements.txt
 ```
 
+> [!TIP]
+> **Решение проблемы ModuleNotFoundError (hvac):**
+> Если после установки вы получаете ошибку `No module named 'hvac'`, убедитесь, что вы используете `pip` того же интерпретатора, которым запускаете скрипт:
+> `python3 -m pip install -r app/requirements.txt`
+
 ### Поиск с авторизацией через встроенный токен:
 *(По умолчанию используется Root-токен для тестов)*
 ```bash
 python app/vault_search.py "что_ищем" --mount stage
 ```
 
-### Поиск с авторизацией через OIDC (Keycloak):
+### Поиск с авторизацией через OIDC (внешний Vault):
+Если вы подключаетесь к корпоративному Vault, укажите его URL и имя роли:
 ```bash
-python app/vault_search.py "что_ищем" --mount prod --auth oidc
+python app/vault_search.py "что_ищем" --mount prod --auth oidc --url https://vault.example.com --oidc-role my-corp-role
 ```
+
 При запуске этой команды:
 1. Откроется браузер со страницей авторизации Keycloak.
 2. Введите тестовые данные (**Username**: `test`, **Password**: `test`).
