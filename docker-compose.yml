@@ -23,8 +23,8 @@ services:
       dockerfile: Dockerfile
     container_name: vault-seed
     environment:
-      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
-      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - VAULT_ADDR=http://vault-dev:8200
+      - VAULT_TOKEN=myroot
     depends_on:
       - vault
     networks:
@@ -40,8 +40,8 @@ services:
       dockerfile: Dockerfile
     container_name: vault-seed-acl
     environment:
-      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
-      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - VAULT_ADDR=http://vault-dev:8200
+      - VAULT_TOKEN=myroot
     depends_on:
       - vault
       - vault-seed
@@ -75,8 +75,8 @@ services:
       dockerfile: Dockerfile
     container_name: vault-seed-oidc
     environment:
-      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
-      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - VAULT_ADDR=http://vault-dev:8200
+      - VAULT_TOKEN=myroot
       - KEYCLOAK_URL=http://keycloak:8080
     depends_on:
       - vault
@@ -94,8 +94,8 @@ services:
       dockerfile: Dockerfile
     container_name: vault-load-tester
     environment:
-      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
-      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - VAULT_ADDR=http://vault-dev:8200
+      - VAULT_TOKEN=myroot
     depends_on:
       - vault
       - vault-seed
@@ -111,8 +111,8 @@ services:
       dockerfile: Dockerfile
     container_name: vault-constant-load
     environment:
-      - VAULT_ADDR=${VAULT_ADDR:-http://vault-dev:8200}
-      - VAULT_TOKEN=${VAULT_TOKEN:-myroot}
+      - VAULT_ADDR=http://vault-dev:8200
+      - VAULT_TOKEN=myroot
       - TARGET_RPS=1000
       - WORKERS=50
     depends_on:
